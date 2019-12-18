@@ -241,13 +241,18 @@ class xflib(object):
         # // Ref: "Magnetic Coordinate Systems", Laundal and Richmond
         # // Space Science Review 2016, DOI 10.1007/s11214-016-0275-y
 
+        # 12-2019: Fixed conversion bug (A1 rotation was not correctly returned)
+        # mag=True if longitude is in magnetic dipole coordinates
+        # mag=False if longitude is in geographic coordinates
+
         ut_hr = itime.hour + itime.minute/60 # /1000.0/60.0;  #// Milliseconds to fractional hours (UT)
         A1 = [1, 51.48, 0];         #// Location of Greenwich (for UT reference) 
         B1 = [0, 0, 0]; # B1[3]                         // Location of Greenwich in geomag
-
-        self.s2c(A1);
-        self.geo2mag(A1, itime);
-        self.c2s(A1);
+        
+        A1 = self.s2c(A1);
+        A1 = self.geo2mag(A1, itime);
+        A1 = self.c2s(A1);
+        
 
         return np.mod(ut_hr + (lon - A1[2])/15.0,  24);
 
@@ -261,9 +266,9 @@ class xflib(object):
         A1 = [1, 51.48, 0];         #// Location of Greenwich (for UT reference) 
         B1 = [0, 0, 0]; # B1[3]                         // Location of Greenwich in geomag
 
-        self.s2c(A1);
-        self.geo2mag(A1, itime);
-        self.c2s(A1);
+        A1 = self.s2c(A1);
+        A1 = self.geo2mag(A1, itime);
+        A1 = self.c2s(A1);
         
         return 15.*(mlt - ut_hr) + A1[2]
 

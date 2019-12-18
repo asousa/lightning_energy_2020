@@ -134,9 +134,7 @@ class GLD_file_tools(object):
 			filesize = np.floor(os.path.getsize(filepath)).astype('int')
 			imax = filesize
 			imin = 0
-
 			thefile = open(filepath,'r')
-
 			
 			# Find closest index to target time:
 			# print("recursing t_ind")
@@ -147,14 +145,15 @@ class GLD_file_tools(object):
 			# Find closest index to window time:
 			tprev_ind = self.recursive_search_kernel(thefile,tprev,imin,imax)
 
-			# Add some margin to account for incomplete lines:
-			# (The recursive search skips ahead to the next complete line,
-			# so our end points may be one or two lines off from the truth)
-			tprev_ind = max(0, tprev_ind- post_search_buffer);
-			t_ind = min(filesize, t_ind + post_search_buffer);
-			thefile.seek(tprev_ind)
-
 			if (t_ind is not None) and (tprev_ind is not None):
+
+				# Add some margin to account for incomplete lines:
+				# (The recursive search skips ahead to the next complete line,
+				# so our end points may be one or two lines off from the truth)
+				tprev_ind = max(0, tprev_ind- post_search_buffer);
+				t_ind = min(filesize, t_ind + post_search_buffer);
+				thefile.seek(tprev_ind)
+
 				# return None, None
 				# Load rows between tprev_ind and t_ind:
 				while (thefile.tell() < t_ind):
@@ -186,20 +185,21 @@ class GLD_file_tools(object):
 				tprev_ind = self.recursive_search_kernel(thefile,tprev,imin,imax)
 				#print self.datetime_from_row(self.parse_line(thefile,tprev_ind))
 				
-				# Add some margin to account for incomplete lines:
-				# (The recursive search skips ahead to the next complete line,
-				# so our end points may be one or two lines off from the truth)
-				tprev_ind = max(0, tprev_ind- post_search_buffer);
-				t_ind = min(filesize, t_ind + post_search_buffer);
-				thefile.seek(tprev_ind)
-
-
-				rows_prev = []
-				times_prev= []
-				# if (t_ind is None) or (tprev_ind is None):
-				#   return None, None
-				# Load rows between tprev_ind and t_ind:
 				if (t_ind is not None) and (tprev_ind is not None):
+
+					# Add some margin to account for incomplete lines:
+					# (The recursive search skips ahead to the next complete line,
+					# so our end points may be one or two lines off from the truth)
+					tprev_ind = max(0, tprev_ind- post_search_buffer);
+					t_ind = min(filesize, t_ind + post_search_buffer);
+					thefile.seek(tprev_ind)
+
+
+					rows_prev = []
+					times_prev= []
+					# if (t_ind is None) or (tprev_ind is None):
+					#   return None, None
+					# Load rows between tprev_ind and t_ind:
 					while (thefile.tell() < t_ind):
 						curr_line = self.parse_line(thefile,thefile.tell())
 						newtime = self.datetime_from_row(curr_line)
@@ -245,8 +245,8 @@ class GLD_file_tools(object):
 		if n > 50: 
 			logging.warning('max recursions!')
 			return None
-		# if abs(imin - imax) <= 200:
-		if abs(imin - imax) <= 10:
+		if abs(imin - imax) <= 200:
+		# if abs(imin - imax) <= 12:
 			# print(n, imin, imax, imid, imax-imin, curr_time)
 			return imin
 		else:
@@ -260,6 +260,8 @@ class GLD_file_tools(object):
 				#imin += 1
 			# Uncomment this to show recursion (hella sweet)  
 			# logging.debug(f'recursion {n}: {imin}, {imax}, {imax-imin}, {curr_time}')
+				# print(f'recursion {n}: {imin}, {imax}, {imax-imin}, {curr_time}')
+
 			return self.recursive_search_kernel(thefile,target_time,imin,imax,n+1)
 			
 	def parse_line(self, thefile, theindex, n=0):
@@ -270,7 +272,7 @@ class GLD_file_tools(object):
 		line = thefile.readline()
 		vec = line.split('\t')
 
-		# print "index:",theindex
+		# print("index:",theindex)
 		if n > 50:
 			# print "failed to find an entry"
 			logging.info("Failed to find an entry")
@@ -278,6 +280,7 @@ class GLD_file_tools(object):
 
 		if (len(vec)==25) and (vec[0] == '0'):
 			# print vec[0]
+			
 			try:
 				return np.array(vec[1:11],'float')
 			except:
@@ -312,24 +315,24 @@ if __name__ == "__main__":
 											format='[%(levelname)s] (%(threadName)-10s) %(message)s',
 											)  
 
-	GLD_root = '/Volumes/lairdata/lightningdata/From Alexandria/GLD_cleaned/ASCII'
-	t = datetime.datetime(2015,4,2,16,20,0)
+	# GLD_root = '/Volumes/lairdata/lightningdata/From Alexandria/GLD_cleaned/ASCII'
+	GLD_root='data'
 	#startfile, startfile_time = get_file_at(t)
 	#startfile ='alex/array/home/Vaisala/feed_data/GLD/2015-03-26/GLD-201503260223.dat'
 
 	print('initializing')
 	print(os.listdir(GLD_root))
 
-	G = GLD_file_tools(GLD_root)
+	G = GLD_file_tools(GLD_root, prefix='FAKEGLD')
 	G.refresh_directory()
 	print('doin it')
-	# flashes, flash_times = G.load_flashes(datetime.datetime(2018,8,4,0,0,0), datetime.timedelta(minutes=10))
+	flashes, flash_times = G.load_flashes(datetime.datetime(2050,1,1,18,0,0), datetime.timedelta(hours=18))
 	# print(len(flashes))
 	# print(flash_times[0], flash_times[-1])
 	# print(flash_times)
 
 
-	for hours in range(0,24):
-	  for mins in range(0,60):
-	    f, ft = G.load_flashes(datetime.datetime(2015,4,2, hours, mins,0))
-	  	
+	# for hours in range(0,24):
+	#   for mins in range(0,60):
+	#     f, ft = G.load_flashes(datetime.datetime(2015,4,2, hours, mins,0))
+	#   	
