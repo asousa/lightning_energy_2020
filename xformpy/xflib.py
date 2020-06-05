@@ -247,7 +247,6 @@ class xflib(object):
 
         ut_hr = itime.hour + itime.minute/60 # /1000.0/60.0;  #// Milliseconds to fractional hours (UT)
         A1 = [1, 51.48, 0];         #// Location of Greenwich (for UT reference) 
-        B1 = [0, 0, 0]; # B1[3]                         // Location of Greenwich in geomag
         
         A1 = self.s2c(A1);
         A1 = self.geo2mag(A1, itime);
@@ -264,7 +263,6 @@ class xflib(object):
 
         ut_hr = itime.hour + itime.minute/60 # /1000.0/60.0;  #// Milliseconds to fractional hours (UT)
         A1 = [1, 51.48, 0];         #// Location of Greenwich (for UT reference) 
-        B1 = [0, 0, 0]; # B1[3]                         // Location of Greenwich in geomag
 
         A1 = self.s2c(A1);
         A1 = self.geo2mag(A1, itime);

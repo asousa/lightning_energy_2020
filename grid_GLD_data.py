@@ -26,13 +26,14 @@ from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.integrate import nquad
 from scipy.interpolate import interp1d
-from GLD_file_tools import GLD_file_tools
+# from GLD_file_tools import GLD_file_tools
 
 import aacgmv2
 
 from solar import daynight_terminator
 
-
+# Fuck it, just load all the entries from the file:
+from clean_GLD import GLD_whole_file
 
 def data_grid_at(in_time, lookback_time, gld=None):
     # P_A = 5e3
@@ -45,30 +46,45 @@ def data_grid_at(in_time, lookback_time, gld=None):
     # Ipeak2Io = 1
 #     print np.shape(times_to_do)
     print(f"loading flashes at {in_time}")
-    data_grid = []
+    # data_grid = []
+    data_grid_cgm = []
+    data_grid_mag = []
 
-    Ktimes, Kp = load_Kp('data/indices/Kp_1999_2018.dat')
-    Ktimes = [k + datetime.timedelta(minutes=90) for k in Ktimes]  # 3-hour bins; the original script labeled them in the middle of the bin
-    Ktimes = np.array(Ktimes)
-    Kp = np.array(Kp)
+    # Ktimes, Kp = load_Kp('data/indices/Kp_1999_2018.dat')
+    # Ktimes = [k + datetime.timedelta(minutes=90) for k in Ktimes]  # 3-hour bins; the original script labeled them in the middle of the bin
+    # Ktimes = np.array(Ktimes)
+    # Kp = np.array(Kp)
 
     # Get Kpmax -- max value of Kp over the last 24 hours (8 bins):
-    Kpmax = np.max([Kp[0:-8],Kp[1:-7],Kp[2:-6], Kp[3:-5], Kp[4:-4],Kp[5:-3],Kp[6:-2], Kp[7:-1], Kp[8:]],axis=0)
-    Kpmtimes = Ktimes[8:]
+    # Kpmax = np.max([Kp[0:-8],Kp[1:-7],Kp[2:-6], Kp[3:-5], Kp[4:-4],Kp[5:-3],Kp[6:-2], Kp[7:-1], Kp[8:]],axis=0)
+    # Kpmtimes = Ktimes[8:]
 
     itrpl = interp1d([x.timestamp() for x in Kpmtimes], Kpmax, kind='nearest')
     Kpm = itrpl(in_time.timestamp())
     itrpl = interp1d([x.timestamp() for x in Ktimes], Kp, kind='nearest')
     Kp_cur = itrpl(in_time.timestamp())
 
-    flashes, flash_times = gld.load_flashes(in_time, lookback_time)
+    # flashes, flash_times = gld.load_flashes(in_time, lookback_time)
+
+    t0 = in_time - lookback_time
+    t1 = in_time    
 
 
+    cur_day = t0.replace(hour=0, minute=0, second=0, microsecond=0)
 
+    if gld.loaded_day != cur_day:
+        print(f'loading whole day file for {cur_day}')
+        gld.load_day(cur_day)
 
-    print(f'Loaded {np.shape(flashes)[0]} flashes')
+    if len(gld.times) > 0:
+        flashes = gld.flashes[(gld.times >=t0) & (gld.times < t1)]
+        flash_times = gld.times[(gld.times >=t0) & (gld.times < t1)]
+    else:
+        flashes = None
+        flash_times = None
+
     if flashes is not None:
-
+        print(f'Loaded {np.shape(flashes)[0]} flashes')
         # ------------------- day / night calculation --------------------       
         # Threshold day / night via terminator, in geographic coordinates:
         is_day = np.zeros_like(flash_times, dtype='bool')
@@ -89,8 +105,11 @@ def data_grid_at(in_time, lookback_time, gld=None):
             if len(hits) > 0:
         
                 local_times = flash_times[hits]
-                local_lons = flashes[hits,8]
-                local_lats = flashes[hits,7]
+                # local_lats = flashes[hits,7]
+                # local_lons = flashes[hits,8]
+                local_lats = flashes[hits,2]
+                local_lons = flashes[hits,3]
+                
 
                 # Get terminator, in geographic coordinates
                 tlons, tlats, tau, dec = daynight_terminator(tcenter, 1, -180, 180)
@@ -111,64 +130,73 @@ def data_grid_at(in_time, lookback_time, gld=None):
 
 
         print(f'{np.sum(is_day)} day bins, {np.sum(~is_day)} night bins')
-        if CGM:
-        # ----------------------- CGM coordinates -----------------------
-            # pre_cgm_happy_inds = (np.abs(flashes[:,7]) < 90.) & (np.abs(flashes[:,8]) < 360.) 
-            I_pre = np.array(flashes[:,9])
-            ft_pre = flash_times[:]
+        # if CGM:
+    # ----------------------- CGM coordinates -----------------------
+        # pre_cgm_happy_inds = (np.abs(flashes[:,7]) < 90.) & (np.abs(flashes[:,8]) < 360.) 
+        # I_pre = np.array(flashes[:,9])
+        I_pre = np.array(flashes[:,4])
+        ft_pre = flash_times[:]
 
-            # cgmlat, cgmlon = aacgmv2.convert(flashes[pre_cgm_happy_inds,7], flashes[pre_cgm_happy_inds,8], 5.0*np.ones_like(flashes[pre_cgm_happy_inds,7]))
-            geolats = (flashes[:, 7])
-            geolons = (flashes[:, 8])
-            geoalts = (5.0*np.ones_like(geolats)).tolist()
+        # cgmlat, cgmlon = aacgmv2.convert(flashes[pre_cgm_happy_inds,7], flashes[pre_cgm_happy_inds,8], 5.0*np.ones_like(flashes[pre_cgm_happy_inds,7]))
+        # geolats = (flashes[:, 7])
+        # geolons = (flashes[:, 8])
+        geolats = (flashes[:, 2])
+        geolons = (flashes[:, 3])
+        geoalts = (5.0*np.ones_like(geolats)).tolist()
+        
+        cgmlat = np.zeros([len(geolats)])
+        cgmlon = np.zeros([len(geolats)])
+        mlts   = np.zeros([len(geolats)])
+
+        # Do the loop here, since the vectorized version is having trouble
+        for x in range(len(geolats)):
+            cgmlat[x], cgmlon[x], _ = aacgmv2.convert_latlon(geolats[x], geolons[x], 5.0, ft_pre[x], 'G2A')
             
-            cgmlat = np.zeros([len(geolats)])
-            cgmlon = np.zeros([len(geolats)])
-            mlts   = np.zeros([len(geolats)])
+            # Theirs is probably more correct than mine! But it's slow...
+            # mlts[x] = aacgmv2.convert_mlt(cgmlon[x], ft_pre[x], False)
+            mlts[x] = xf.lon2MLT(ft_pre[x], cgmlon[x])
 
-            # Do the loop here, since the vectorized version is having trouble
-            for x in range(len(geolats)):
-                cgmlat[x], cgmlon[x], _ = aacgmv2.convert_latlon(geolats[x], geolons[x], 5.0, ft_pre[x], 'G2A')
-                
-                # Theirs is probably more correct than mine! But it's slow...
-                mlts[x] = aacgmv2.convert_mlt(cgmlon[x], ft_pre[x], False)
+        happy_inds = ~np.isnan(cgmlat).flatten()
 
-            happy_inds = ~np.isnan(cgmlat).flatten()
+        cgmlat = cgmlat[happy_inds]
+        cgmlon = cgmlon[happy_inds]
+        mlts   = mlts[happy_inds]
+        is_day_tmp = is_day[happy_inds]
+        cgmlon[cgmlon < 0] += 360.
 
-            cgmlat = cgmlat[happy_inds]
-            cgmlon = cgmlon[happy_inds]
-            mlts   = mlts[happy_inds]
-            is_day = is_day[happy_inds]
-            cgmlon[cgmlon < 0] += 360.
+        I = I_pre[happy_inds]*Ipeak2Io
+        # print(Kpm)
+        # print(np.shape(cgmlat), np.shape(cgmlon), np.shape(mlts), np.shape(I), Kpm, Kp_cur)
+        # print(mlts)
+        # print(np.shape(cgmlat), np.shape(cgmlon), np.shape(mlts), np.shape(I), np.shape(Kpm*np.ones_like(I)))
+        data_grid_cgm = np.vstack([cgmlat, cgmlon, mlts, I, Kpm*np.ones_like(I), Kp_cur*np.ones_like(I), is_day_tmp]).T
+        # print(data_grid[:,2])
+        # return data_grid
 
-            I = I_pre[happy_inds]*Ipeak2Io
-            # print(Kpm)
-            # print(np.shape(cgmlat), np.shape(cgmlon), np.shape(mlts), np.shape(I), Kpm, Kp_cur)
-            # print(mlts)
-            # print(np.shape(cgmlat), np.shape(cgmlon), np.shape(mlts), np.shape(I), np.shape(Kpm*np.ones_like(I)))
-            data_grid = np.vstack([cgmlat, cgmlon, mlts, I, Kpm*np.ones_like(I), Kp_cur*np.ones_like(I), is_day]).T
-            # print(data_grid[:,2])
-            return data_grid
+        # else:
+    # ----------------------- Magnetic Dipole coordinates -----------------------
+        for flash, flashtime, day_flag in zip(flashes, flash_times, is_day):
 
-        else:
-        # ----------------------- Magnetic Dipole coordinates -----------------------
-            for flash, flashtime, day_flag in zip(flashes, flash_times, is_day):
+            # glat = flash[7]
+            # glon = flash[8]
+            # I    = flash[9]*Ipeak2Io  # Added after stats_v6
+            # Indices from gld_whole_file
+            glat = flash[2]
+            glon = flash[3]
+            I    = flash[4]*Ipeak2Io  # Added after stats_v6
+            # Get location in geomagnetic coordinates
+            mloc = xf.rllgeo2rllmag([1.0, glat, glon], flashtime)
 
-                glat = flash[7]
-                glon = flash[8]
-                # I    = flash[9]*Ipeak2Io  # Added after stats_v6
-                I    = flash[9]*Ipeak2Io  # Added after stats_v6
-                # Get location in geomagnetic coordinates
-                mloc = xf.rllgeo2rllmag([1.0, glat, glon], flashtime)
+            # Get MLT:
+            mlt = xf.lon2MLT(flashtime, mloc[2])
 
-                # Get MLT:
-                mlt = xf.lon2MLT(flashtime, mloc[2])
+            data_grid_mag.append([mloc[1], mloc[2], mlt, I, Kpm, Kp_cur, day_flag])
 
-                data_grid.append([mloc[1], mloc[2], mlt, I, Kpm, Kp_cur, day_flag])
+        data_grid_mag = np.array(data_grid_mag)
+        # print(data_grid[:,2])
+        # return data_grid
 
-            data_grid = np.array(data_grid)
-            # print(data_grid[:,2])
-            return data_grid
+        return data_grid_cgm, data_grid_mag
     else:
         return None
 
@@ -187,12 +215,18 @@ def analyze_flashes(data_grid, in_time):
     dg2[:,2] = (dg2[:,2] > 6) & (dg2[:,2] <= 18)   # Is day?
 
     # hist_bins = np.arange(0,24.5, 0.5)
-    flash_map = np.zeros([len(gridlats), len(gridlons)])
-    cur_map   = np.zeros([len(gridlats), len(gridlons)])
-    pwr_map   = np.zeros([len(gridlats), len(gridlons)])
+    flash_map = dict()
+    cur_map = dict()
+    pwr_map = dict()
+
+    # Separate these by day and night
+    for kk in ['day','night']:
+        flash_map[kk] = np.zeros([len(gridlats), len(gridlons)])
+        cur_map[kk]   = np.zeros([len(gridlats), len(gridlons)])
+        pwr_map[kk]   = np.zeros([len(gridlats), len(gridlons)])
+
     mlt_hist, _  = np.histogram(data_grid[:,2], hist_bins)
 
-    # Io_bins = np.linspace(0,1000,101)
     Io_bins = np.unique(np.round(pow(10,np.linspace(0,3,144))))*Ipeak2Io # 101 log-spaced dividers
     Io_hist, _ = np.histogram(np.abs(data_grid[:,3]), Io_bins)
 
@@ -207,17 +241,17 @@ def analyze_flashes(data_grid, in_time):
         # if row[2]:
         if row[-1]: # is_day flag
             day_bins[int(row[0]), np.mod(int(row[1]), 360)] += pow(row[3]*1e3, 2.0)
+            flash_map['day'][int(row[0]), np.mod(int(row[1]), 360)] += 1
+            # cur_map['day'][int(row[0]), np.mod(int(row[1]), 360)] += pow(row[3]*1e3, 2.0)
+
         else:
             # print(row[0], row[1], np.mod(row[1], 360))
             nite_bins[int(row[0]), np.mod(int(row[1]), 360)] += pow(row[3]*1e3, 2.0)
-        
-        # Flash count histogram
-        flash_map[int(row[0]), np.mod(int(row[1]), 360)] += 1
-        
-        # 2d current histogram
-        cur_map[int(row[0]), np.mod(int(row[1]), 360)] += pow(row[3]*1e3, 2.0)
+            flash_map['night'][int(row[0]), np.mod(int(row[1]), 360)] += 1
+            # cur_map['night'][int(row[0]), np.mod(int(row[1]), 360)] += pow(row[3]*1e3, 2.0)
 
-
+    cur_map['day'] = day_bins
+    cur_map['night'] = nite_bins
 
     # --------- Power stencil map
     day_todo = np.where(day_bins > 0)
@@ -226,8 +260,11 @@ def analyze_flashes(data_grid, in_time):
     for isday in [False, True]:
         if isday:
             todo = np.where(day_bins > 0)
+            daykey = 'day'
         else:
             todo = np.where(nite_bins > 0)
+            daykey = 'night' # (yes, this is sloppy)
+
         for latind, lonind in zip(todo[0], todo[1]):
             if (np.abs(gridlats[latind]) >= stencil_lats[0]) & (np.abs(gridlats[latind]) <= stencil_lats[-1]):
 
@@ -248,27 +285,33 @@ def analyze_flashes(data_grid, in_time):
 
                     if lonleft < 0:
                         # Wrap around left:
-                        pwr_map[latleft:latright, 0:lonright] += \
+                        pwr_map[daykey][latleft:latright, 0:lonright] += \
                                 stencil[:, np.abs(lonleft):]*pwr
-                        pwr_map[latleft:latright, (len(gridlons) - np.abs(lonleft)):] += \
+                        pwr_map[daykey][latleft:latright, (len(gridlons) - np.abs(lonleft)):] += \
                                 stencil[:,0:np.abs(lonleft)]*pwr
                     elif lonright >= len(gridlons):
                         # wrap around right:
-                        pwr_map[latleft:latright, lonleft:len(gridlons)] += \
+                        pwr_map[daykey][latleft:latright, lonleft:len(gridlons)] += \
                             stencil[:,0:len(gridlons) - lonleft]*pwr
-                        pwr_map[latleft:latright, 0:np.abs(lonright) - len(gridlons)] += \
+                        pwr_map[daykey][latleft:latright, 0:np.abs(lonright) - len(gridlons)] += \
                             stencil[:,len(gridlons) - lonleft:]*pwr
                     else:
-                        pwr_map[latleft:latright, lonleft:lonright] += stencil*pwr
+                        pwr_map[daykey][latleft:latright, lonleft:lonright] += stencil*pwr
     # -----
 
 
-
-
+    for k in ['day','night']:
+        # Roll the output data arrays to get [-180, 180] instead of [0, 360]
+        flash_map[k] = np.roll(flash_map[k],int(len(gridlons)/2), axis=1)
+        cur_map[k]   = np.roll(cur_map[k] , int(len(gridlons)/2), axis=1)
+        pwr_map[k]   = np.roll(pwr_map[k],  int(len(gridlons)/2), axis=1)
     # Roll the output data arrays to get [-180, 180] instead of [0, 360]
-    outdata['pwr_map']   = np.roll(pwr_map,  int(len(gridlons)/2), axis=1)
-    outdata['flash_map'] = np.roll(flash_map,int(len(gridlons)/2), axis=1)
-    outdata['cur_map']   = np.roll(cur_map , int(len(gridlons)/2), axis=1)
+    # outdata['pwr_map']   = np.roll(pwr_map,  int(len(gridlons)/2), axis=1)
+    # outdata['flash_map'] = np.roll(flash_map,int(len(gridlons)/2), axis=1)
+    # outdata['cur_map']   = np.roll(cur_map , int(len(gridlons)/2), axis=1)
+    outdata['flash_map'] = flash_map
+    outdata['cur_map']   = cur_map
+    outdata['pwr_map']   = pwr_map
     outdata['mlt_hist']  = mlt_hist
     outdata['Io_hist']   = Io_hist
     outdata['in_time']   = in_time
@@ -276,7 +319,7 @@ def analyze_flashes(data_grid, in_time):
 
 
 # Convert the Matlab coastline datafile to geomagnetic coordinates:
-def get_coast_mag(itime):
+def get_coast_mag(itime, xf):
     # xf = xflib.xflib(lib_path='/shared/users/asousa/WIPP/3dWIPP/python/libxformd.so')
     coastlines = scipy.io.loadmat('data/coastlines.mat')
 
@@ -306,9 +349,31 @@ def get_coast_mag(itime):
 
     return coast_lat_mag, coast_lon_mag
 
+def get_daynite_terminator_mag(itime, xf):
+
+        # Get terminator, in geographic coordinates
+    tlons, tlats, tau, dec = daynight_terminator(itime, 1, -180, 180)
+
+    tlat_mag = np.zeros_like(tlats)
+    tlon_mag = np.zeros_like(tlons)
+    for ind, (lat, lon) in enumerate(zip(tlats, tlons)):
+        if np.isnan(lat) or np.isnan(lon):
+            tlat_mag[ind] = np.nan
+            tlon_mag[ind] = np.nan
+        else:
+            tmpcoords = [1, lat, lon]
+            tmp_mag = xf.rllgeo2rllmag(tmpcoords, itime)
+            tlat_mag[ind] = tmp_mag[1]
+            tlon_mag[ind] = tmp_mag[2] - 180
+    
+
+    tlat_sorted = [y for x, y in sorted(zip(tlon_mag,tlat_mag))]
+    tlon_sorted = [x for x, y in sorted(zip(tlon_mag,tlat_mag))]
+    
+    return tlat_sorted, tlon_sorted
 
 
-def plot_pwr_data(outdata):
+def plot_pwr_data(outdata, lookback_time, gridlons, gridlats, xf):
     # --------------- Latex Plot Beautification --------------------------
     fig_width = 12 
     fig_height = 6
@@ -324,10 +389,10 @@ def plot_pwr_data(outdata):
     plt.rcParams.update(params)
     # --------------- Latex Plot Beautification --------------------------
     
-    pwr_map = outdata['pwr_map']
-    flash_map = outdata['flash_map']
-    cur_map = outdata['cur_map']
-    mlt_hist = outdata['mlt_hist']
+    pwr_map = outdata['pwr_map']['day'] + outdata['pwr_map']['night']
+    # flash_map = outdata['flash_map']
+    # cur_map = outdata['cur_map']
+    # mlt_hist = outdata['mlt_hist']
     in_time = outdata['in_time']
 
     clims=[0, 4] # log space
@@ -360,8 +425,14 @@ def plot_pwr_data(outdata):
     cb.set_ticklabels(cticklabels)
 
 
+    # day-night terminator
+    # Get terminator, in geographic coordinates
+    termlat, termlon = get_daynite_terminator_mag(in_time + lookback_time/2, xf)
 
-    coast_lat_mag, coast_lon_mag = get_coast_mag(in_time)
+    ax1.plot(termlon, termlat,'w')
+
+
+    coast_lat_mag, coast_lon_mag = get_coast_mag(in_time, xf)
     ax1.plot(coast_lon_mag, coast_lat_mag, 'w')
     ax1.set_xlim([-180, 180])
     ax1.set_ylim([-90, 90])
@@ -386,7 +457,6 @@ def plot_pwr_data(outdata):
 
 
 
-# def do_thing():
 if __name__ == "__main__":
     print("hey dude, hey")
     xf = xflib.xflib(lib_path='xformpy/libxformd.so')
@@ -395,31 +465,47 @@ if __name__ == "__main__":
     # lookback_time = datetime.timedelta(minutes=5)
 
     # The range of times we'll do:
-    start_day = datetime.datetime(2014,12,14,0,0,0)
-    stop_day = datetime.datetime(2014,12,14,21,0,0)
+    # start_day = datetime.datetime(2012,11,29,0,0,0)
+    start_day = datetime.datetime(2015,11,1,0,0,0)  # Starting where I stopped it at
+    stop_day = datetime.datetime(2019,1,1,1,0,0)
     
 
-    CGM = True # True for geo -> CGM; false for geo -> MAG
+    # CGM = False # True for geo -> CGM; false for geo -> MAG
                 # (CGM = the equivalent magnetic dipole coordinate, given the IGRF-deformed field)
 
-    dump_path = 'outputs/GLDstats_v10_CGM/data'
-    fig_path = 'outputs/GLDstats_v10_CGM/figures'
+    # dump_path = 'outputs/GLDstats_v10_CGM/data'
+    # fig_path = 'outputs/GLDstats_v10_CGM/figures'
+    # dump_path = 'outputs/GLDstats_v10_MAG/data'
+    # fig_path = 'outputs/GLDstats_v10_MAG/figures'
+    
+    out_root = 'outputs/GLDstats_v11'
+    # dump_root = 'outputs/GLDstats_v11/data'
+    # fig_root = 'outputs/GLDstats_v11/figures'
 
-    # GLD_path = "/Volumes/lairdata/lightningdata/From Alexandria/GLD_cleaned/ASCII";
-    GLD_path = "data/"
-    gld = GLD_file_tools(GLD_path, prefix='FAKEGLD')
+    dump_path_cgm = os.path.join(out_root, 'CGM','data')
+    dump_path_mag = os.path.join(out_root, 'MAG', 'data')
+    fig_path_cgm = os.path.join(out_root, 'CGM', 'figures')
+    fig_path_mag = os.path.join(out_root, 'MAG', 'figures')
+    GLD_path = "/Volumes/lairdata/lightningdata/From Alexandria/GLD_cleaned/ASCII";
+
+    for p in [dump_path_mag, dump_path_cgm, fig_path_mag, fig_path_cgm]:
+        if not os.path.exists(p):
+            os.makedirs(p)
+        
+    # gld = GLD_file_tools(GLD_path, prefix='GLD')
+
+    # GLD_path = "data/"
+    # gld = GLD_file_tools(GLD_path, prefix='FAKEGLD')
+
+    # gld.refresh_directory()
+
+
+    gld = GLD_whole_file(filepath=[GLD_path], prefix='GLD')
     gld.refresh_directory()
-    # Get Kp data
-    # Ktimes, Kp = load_Kp('data/indices/Kp_1999_2018.dat')
-    # Ktimes = [k + datetime.timedelta(minutes=90) for k in Ktimes]  # 3-hour bins; the original script labeled them in the middle of the bin
-    # Ktimes = np.array(Ktimes)
-    # Kp = np.array(Kp)
 
-    # # Get Kpmax -- max value of Kp over the last 24 hours (8 bins):
-    # Kpmax = np.max([Kp[0:-8],Kp[1:-7],Kp[2:-6], Kp[3:-5], Kp[4:-4],Kp[5:-3],Kp[6:-2], Kp[7:-1], Kp[8:]],axis=0)
-    # Kpmtimes = Ktimes[8:]
-
-
+    # G.load_day(datetime.datetime(2015,1,1,0,0,0))
+    # flashes = G.flashes
+    # flash_times = G.times
 # ---------------------- Power database setup --------------------------
     pwr_db_path = 'data/pwr_db_20deg_spread.pklz';
 
@@ -443,7 +529,7 @@ if __name__ == "__main__":
     cell_lon_offset = np.round(inp_pwr_dict['lon_spread']/inp_pwr_dict['cellsize'])
 
     gridlats = np.arange(-90, 91, cellsize)
-    gridlons = np.arange(-180, 181, cellsize)
+    gridlons = np.arange(-180, 180, cellsize)
 
     hist_bins = np.arange(0,24.5, 0.5)
 
@@ -451,37 +537,84 @@ if __name__ == "__main__":
 
 
 # ---------------------- MAIN LOOP --------------------------
-    # tasklist = Ktimes[(Ktimes > start_day) & (Ktimes <= stop_day)]
+    
+    # Globals... globals, everywhere...
+    Ktimes, Kp = load_Kp('data/indices/Kp_1999_2018.dat')
+    Ktimes = [k + datetime.timedelta(minutes=90) for k in Ktimes]  # 3-hour bins; the original script labeled them in the middle of the bin
+    Ktimes = np.array(Ktimes)
+    Kp = np.array(Kp)
+
+    # Get Kpmax -- max value of Kp over the last 24 hours (8 bins):
+    Kpmax = np.max([Kp[0:-8],Kp[1:-7],Kp[2:-6], Kp[3:-5], Kp[4:-4],Kp[5:-3],Kp[6:-2], Kp[7:-1], Kp[8:]],axis=0)
+    Kpmtimes = Ktimes[8:]
+
+    start_day = max(start_day, min(gld.file_times))
+    stop_day = min(stop_day, max(gld.file_times))
+
+    tasklist = Ktimes[(Ktimes > start_day) & (Ktimes <= stop_day)]
+
 
 
     # # Debuggin'
-    start_day = datetime.datetime(2015,1,2,0,0,0)
-    lookback_time = datetime.timedelta(hours=24)
-    # tasklist = [(start_day + datetime.timedelta(hours=int(x)))for x in np.arange(0,1,1)]
-    tasklist = [start_day]
+    # start_day = datetime.datetime(2015,1,2,0,0,0)
+    # lookback_time = datetime.timedelta(hours=24)
+    
+    # tasklist = [start_day]
+
     for intime in tasklist:
-        print(intime)
+        # print(intime)
+        # Check if we already did these entries first:
+        fn1 = os.path.join(dump_path_mag, intime.strftime('%m_%d_%Y_%H_%M') + '.pklz')
+        fn2 = os.path.join(dump_path_cgm, intime.strftime('%m_%d_%Y_%H_%M') + '.pklz')
 
-        datagrid = data_grid_at(intime, lookback_time, gld)
+        if os.path.exists(fn1) and os.path.exists(fn2):
+            print(f"{fn1} and {fn2} already exist; skipping")
+            continue
+        try:
+            datagrid_cgm, datagrid_mag = data_grid_at(intime, lookback_time, gld)
+            for CGM in [True, False]:
 
-        if datagrid is not None:
-            datum = analyze_flashes(datagrid, intime)
-            filename = os.path.join(dump_path, intime.strftime('%m_%d_%Y_%H_%M') + '.pklz')
-            print(f' datagrid has shape {np.shape(datagrid)}')
-            print(f' Output filename is {filename}')
+                if CGM:
+                    print('doing CGM analysis')
+                    datagrid = datagrid_cgm
+                    fig_path = fig_path_cgm
+                    dump_path = dump_path_cgm
+                else:
+                    print('doing MAG analysis')
+                    datagrid = datagrid_mag
+                    fig_path = fig_path_mag
+                    dump_path = dump_path_mag
 
-            if datum is not None:
-                fig, ax0, ax1, ax2 = plot_pwr_data(datum)
-                figname = os.path.join(fig_path, datum['in_time'].strftime('%m_%d_%Y_%H_%M') +'.png')
-                fig.savefig(figname, ldpi=300)
+                if datagrid is not None:
+                    if len(datagrid) > 0:
+                        datum = analyze_flashes(datagrid, intime)
+                        filename = os.path.join(dump_path, intime.strftime('%m_%d_%Y_%H_%M') + '.pklz')
+                        print(f' datagrid has shape {np.shape(datagrid)}')
+                        print(f' Output filename is {filename}')
 
-                plt.close(fig)
-                print(f"sum of cur_map: {np.sum(np.sum(datum['cur_map']))}")
-                filename = os.path.join(dump_path, datum['in_time'].strftime('%m_%d_%Y_%H_%M') + '.pklz')
-                with gzip.open(filename, 'wb') as f:
-                    pickle.dump(datum,f)
+                        if datum is not None:
+                            datum['gridlats'] = gridlats
+                            datum['gridlons'] = gridlons
+                            # Save data
+                            filename = os.path.join(dump_path, datum['in_time'].strftime('%m_%d_%Y_%H_%M') + '.pklz')
+                            with gzip.open(filename, 'wb') as f:
+                                pickle.dump(datum,f)
 
 
+                            # Plot it
+                            fig, ax0, ax1, ax2 = plot_pwr_data(datum, lookback_time, gridlons, gridlats, xf)
+                            figname = os.path.join(fig_path, datum['in_time'].strftime('%m_%d_%Y_%H_%M') +'.png')
+                            fig.savefig(figname, ldpi=300)
+                            plt.close(fig)
+
+                else:
+                    print(f'no data found at {intime}')
+
+        except:
+            print(f'Something messed up at {intime}')
+
+
+        
 
                 # fig, ax = plt.subplots(1,1)
                 # ax.plot(hist_bins[:-1], datum['mlt_hist'])

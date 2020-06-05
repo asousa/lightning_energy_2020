@@ -96,12 +96,16 @@ class GLD_file_tools(object):
 		# Select only files which start earlier than our target time:
 		file_list = [f for f in self.file_list if t >= f[0]]
 
-		# if len(file_list) == 0:
-		#   print(("checking previous day  (get_file_at...", t, ")"))
-		#   return self.get_file_at(t - datetime.timedelta(days=1))
-		# else:
-		#   return file_list[-1]  # Last one in the list
-		return file_list[-1] # newest file
+		if len(file_list) > 0:
+			return file_list[-1]
+		else:
+			return None, None
+		# # if len(file_list) == 0:
+		# #   print(("checking previous day  (get_file_at...", t, ")"))
+		# #   return self.get_file_at(t - datetime.timedelta(days=1))
+		# # else:
+		# #   return file_list[-1]  # Last one in the list
+		# return file_list[-1] # newest file
 
 
 
@@ -122,9 +126,9 @@ class GLD_file_tools(object):
 
 		rows =  []
 		times = []
-		if filetime is not None:
-			# return None, None
-		# else:
+		if filetime is None:
+			return None, None
+		else:
 
 			# print "t:",t
 			# print "tprev:",tprev
