@@ -5,8 +5,14 @@ import numpy as np
 class xflib(object):
     ''' A wrapper class for the xform-double coordinate transformation library.
         (The fortran one Forrest used in the raytracer)
-    '''
 
+        To build this thing: You need to compile libxformd.so for your machine.
+            - Move into the xform_double directory
+            - 'make shared'
+            - Copy the new file (libxformd.so) to wherever you'd like it to live.
+
+        6/4/2020: Adding to a standalone git repo --APS
+    '''
 
     def __init__(self, lib_path='libxformd.so'):
 
@@ -269,28 +275,4 @@ class xflib(object):
         A1 = self.c2s(A1);
         
         return 15.*(mlt - ut_hr) + A1[2]
-
-# xf = xflib(lib_path='/shared/users/asousa/WIPP/3dWIPP/python/libxformd.so')
-
-# x_in = [1.,45,17]
-
-# time_in = datetime.datetime(2001, 1, 1, 0, 0, 00);
-
-
-# print x_in
-# x_in = xf.s2c(x_in)
-# print x_in
-
-# # x_in = xf.c2s(x_in)
-# # print x_in
-
-# x_in = xf.geo2sm(x_in, time_in)
-# print x_in
-# x_in = xf.sm2geo(x_in, time_in)
-# print x_in
-# x_in = xf.geo2mag(x_in, time_in)
-# print x_in
-# x_in = xf.mag2geo(x_in, time_in)
-# print x_in
-
 
